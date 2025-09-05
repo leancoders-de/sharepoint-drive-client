@@ -1,4 +1,4 @@
-package de.leancoders.sharepoint.service;
+package de.leancoders.sharepoint.model;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;

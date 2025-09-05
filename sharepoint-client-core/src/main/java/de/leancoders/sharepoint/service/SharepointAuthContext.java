@@ -1,5 +1,6 @@
 package de.leancoders.sharepoint.service;
 
+import de.leancoders.sharepoint.model.SharepointTokenResponse;
 import io.restassured.RestAssured;
 import io.restassured.http.ContentType;
 import io.restassured.specification.RequestSpecification;

@@ -2,6 +2,7 @@ package de.leancoders.sharepoint.service;
 
 import de.leancoders.sharepoint.helper.ObjectMapperFactory;
 import de.leancoders.sharepoint.model.SharepointConfig;
+import de.leancoders.sharepoint.model.SharepointTokenResponse;
 import io.restassured.RestAssured;
 import io.restassured.config.ObjectMapperConfig;
 import io.restassured.config.RestAssuredConfig;

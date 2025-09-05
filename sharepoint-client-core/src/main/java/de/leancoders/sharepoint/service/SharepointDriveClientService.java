@@ -24,7 +24,6 @@ public class SharepointDriveClientService extends SharepointBaseClientService im
         super(sharepointConfig, clientService);
     }
 
-    // https://graph.microsoft.com/v1.0/sites/root
     @Nonnull
     public SharepointSiteResponse sitesRoot() {
         return authContext()
@@ -55,7 +54,6 @@ public class SharepointDriveClientService extends SharepointBaseClientService im
             .as(SharepointSitesResponse.class);
     }
 
-    // https://graph.microsoft.com/v1.0/sites/leancodersde.sharepoint.com,2a58be08-8d56-44ed-942b-6e892404f8fc,2bd44f8e-c688-4990-9c4a-6b331c928b12/drives
     @Nonnull
     public SharepointDrivesResponse drives(@NonNull final String siteId) {
         return authContext()
@@ -71,8 +69,6 @@ public class SharepointDriveClientService extends SharepointBaseClientService im
             .as(SharepointDrivesResponse.class);
     }
 
-    // https://graph.microsoft.com/v1.0/drives/b!CL5YKlaN7USUK26JJAT4_I5P1CuIxpBJnEprMxySixLPksDhzr9FSJar5IgdR-xd/items/01NKOCY3FPF3HNSL6HIJCJVL4DYNOTA2CS/listItem/
-    // https://graph.microsoft.com/v1.0/drives/b!CL5YKlaN7USUK26JJAT4_I5P1CuIxpBJnEprMxySixLPksDhzr9FSJar5IgdR-xd/root/
     @Nonnull
     public SharepointDriveItemResponse rootDriveItem(@NonNull final String driveId) {
         return authContext()
@@ -86,7 +82,7 @@ public class SharepointDriveClientService extends SharepointBaseClientService im
             .when()
             .get("v1.0/drives/{driveId}/root/", driveId)
             .as(SharepointDriveItemResponse.class);
-    }    // https://graph.microsoft.com/v1.0/drives/b!CL5YKlaN7USUK26JJAT4_I5P1CuIxpBJnEprMxySixLPksDhzr9FSJar5IgdR-xd/root/
+    }
 
     @Nonnull
     public SharepointDriveItemsResponse rootDriveItemChildren(@NonNull final String driveId) {
@@ -172,7 +168,6 @@ public class SharepointDriveClientService extends SharepointBaseClientService im
     }
 
 
-    // PATCH https://graph.microsoft.com/v1.0/sites/{site-id}/lists/{list-id}/items/{item-id}/fields
     @Nonnull
     public SharepointFields updateListItem(@NonNull final String siteId,
                                            @NonNull final String listId,
@@ -208,14 +203,6 @@ public class SharepointDriveClientService extends SharepointBaseClientService im
             .as(SharepointLists.class);
     }
 
-    // POST https://graph.microsoft.com/v1.0/me/drive/root/children
-    //Content-Type: application/json
-    //
-    //{
-    //  "name": "New Folder",
-    //  "folder": { },
-    //  "@microsoft.graph.conflictBehavior": "rename"
-    //}
     @Nonnull
     public SharepointDriveItemResponse createRootFolder(@NonNull final String driveId,
                                                         @NonNull final String name) {
@@ -240,14 +227,6 @@ public class SharepointDriveClientService extends SharepointBaseClientService im
             .as(SharepointDriveItemResponse.class);
     }
 
-    // POST /drives/{drive-id}/items/{parent-item-id}/children
-    //Content-Type: application/json
-    //
-    //{
-    //  "name": "New Folder",
-    //  "folder": { },
-    //  "@microsoft.graph.conflictBehavior": "rename"
-    //}
     @Nonnull
     public SharepointDriveItemResponse createFolder(@NonNull final String driveId,
                                                     @NonNull final Iterable<String> fullPath,
@@ -277,12 +256,6 @@ public class SharepointDriveClientService extends SharepointBaseClientService im
             .post("v1.0/drives/{driveId}/items/root:/{path}:/children/", driveId, fullPathString)
             .as(SharepointDriveItemResponse.class);
     }
-
-
-    // TODO create file
-    //  PUT /drives/{drive-id}/items/{parent-id}:/{filename}:/content
-    //  PUT /drives/{drive-id}/root:/FolderA/FileB.txt:/content
-    //  PUT https://graph.microsoft.com/v1.0/drives/b!HQD0spl5J0SwS-xjLHvPUCkgbpkMZ4xFqbyoOaUj4Kl3PR79YHGISqnmuVmScbeI/root:/path/to/file/file.png:/content/
 
     @Nonnull
     public SharepointDriveItemResponse createFile(@NonNull final String driveId,
