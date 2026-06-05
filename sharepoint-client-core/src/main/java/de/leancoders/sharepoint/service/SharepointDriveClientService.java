@@ -14,6 +14,8 @@ import lombok.NonNull;
 
 import javax.annotation.Nonnull;
 
+import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.collect.Iterables.isEmpty;
 import static org.hamcrest.Matchers.anyOf;
 import static org.hamcrest.Matchers.is;
 
@@ -41,12 +43,23 @@ public class SharepointDriveClientService extends SharepointBaseClientService im
 
     @Nonnull
     public SharepointSitesResponse sites() {
+        return sites(100);
+    }
+
+    /**
+     *
+     * @param size the amount to be fetched
+     * @return the sites
+     */
+    @Nonnull
+    public SharepointSitesResponse sites( final int size) {
         return authContext()
             .authorizedRequest()
             .baseUri(config.getGraphUri())
             .port(config.getGraphPort())
             .log().all()
             .accept(ContentType.JSON)
+            .queryParam("$top", size)
             .expect().statusCode(200)
             .log().all()
             .when()
@@ -231,6 +244,8 @@ public class SharepointDriveClientService extends SharepointBaseClientService im
     public SharepointDriveItemResponse createFolder(@NonNull final String driveId,
                                                     @NonNull final Iterable<String> fullPath,
                                                     @NonNull final String name) {
+        checkArgument(!isEmpty(fullPath), "fullPath must not be empty");
+
         final SharepointFolderRequest request = new SharepointFolderRequest();
         request.setName(name);
         // @microsoft.graph.conflictBehavior
@@ -239,7 +254,7 @@ public class SharepointDriveClientService extends SharepointBaseClientService im
         request.setConflictBehavior("fail");
         request.setFolder(new SharepointFolderRequest.SharepointFolderUpdateItem());
 
-        final String fullPathString = String.join("/", fullPath);
+        final String fullPathString = String.join("/", fullPath) + "/";
 
         return authContext()
             .authorizedRequest()

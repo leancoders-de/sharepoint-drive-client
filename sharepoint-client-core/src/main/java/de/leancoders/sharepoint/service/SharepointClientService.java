@@ -49,7 +49,7 @@ public class SharepointClientService {
                                                       @NonNull final String path) {
 
         final SharepointTokenResponse token =
-            given()
+            authGiven()
                 .contentType(ContentType.URLENC)
                 .formParam("client_id", clientId)
                 .formParam("scope", "https://graph.microsoft.com/.default")
@@ -62,16 +62,24 @@ public class SharepointClientService {
                 .post(path, tenantId)
                 .as(SharepointTokenResponse.class);
 
-        this.authContext = SharepointAuthContext.success(tenantId, clientId, clientSecret, token, this::given);
+        this.authContext = SharepointAuthContext.success(tenantId, clientId, clientSecret, token, this::graphGiven);
 
         return this.authContext;
     }
 
     @Nonnull
-    private RequestSpecification given() {
+    private RequestSpecification authGiven() {
         return RestAssured.given()
             .port(config.getAuthPort())
             .baseUri(config.getAuthUri())
+            .config(REST_ASSURED_CONFIG);
+    }
+
+    @Nonnull
+    private RequestSpecification graphGiven() {
+        return RestAssured.given()
+            .port(config.getGraphPort())
+            .baseUri(config.getGraphUri())
             .config(REST_ASSURED_CONFIG);
     }
 
