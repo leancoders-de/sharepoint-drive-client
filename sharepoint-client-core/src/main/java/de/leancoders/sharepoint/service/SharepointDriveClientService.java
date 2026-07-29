@@ -1,21 +1,30 @@
 package de.leancoders.sharepoint.service;
 
+import com.google.common.collect.ImmutableList;
 import de.leancoders.sharepoint.model.SharepointConfig;
+import de.leancoders.sharepoint.request.SharepointDriveItemRole;
 import de.leancoders.sharepoint.request.SharepointFolderRequest;
+import de.leancoders.sharepoint.request.SharepointInviteRequest;
+import de.leancoders.sharepoint.request.SharepointSiteGroupPermissionRequest;
 import de.leancoders.sharepoint.response.SharepointDriveItemResponse;
 import de.leancoders.sharepoint.response.SharepointDriveItemsResponse;
 import de.leancoders.sharepoint.response.SharepointDrivesResponse;
 import de.leancoders.sharepoint.response.SharepointFields;
 import de.leancoders.sharepoint.response.SharepointLists;
+import de.leancoders.sharepoint.response.SharepointPermission;
+import de.leancoders.sharepoint.response.SharepointPermissionsResponse;
 import de.leancoders.sharepoint.response.SharepointSiteResponse;
 import de.leancoders.sharepoint.response.SharepointSitesResponse;
 import io.restassured.http.ContentType;
 import lombok.NonNull;
 
 import javax.annotation.Nonnull;
+import java.util.List;
+import java.util.stream.Collectors;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.collect.Iterables.isEmpty;
+import static com.google.common.collect.Streams.stream;
 import static org.hamcrest.Matchers.anyOf;
 import static org.hamcrest.Matchers.is;
 
@@ -52,7 +61,7 @@ public class SharepointDriveClientService extends SharepointBaseClientService im
      * @return the sites
      */
     @Nonnull
-    public SharepointSitesResponse sites( final int size) {
+    public SharepointSitesResponse sites(final int size) {
         return authContext()
             .authorizedRequest()
             .baseUri(config.getGraphUri())
@@ -294,6 +303,111 @@ public class SharepointDriveClientService extends SharepointBaseClientService im
             .when()
             .put("v1.0/drives/{driveId}/root:/{path}:/content/", driveId, fullPathString)
             .as(SharepointDriveItemResponse.class);
+    }
+
+    @Nonnull
+    public SharepointPermissionsResponse permissions(@NonNull final String driveId,
+                                                     @NonNull final String itemId) {
+
+        return authContext()
+            .authorizedRequest()
+            .urlEncodingEnabled(false)
+            .baseUri(config.getGraphUri())
+            .port(config.getGraphPort())
+            .log().all()
+            .accept(ContentType.JSON)
+            .expect().statusCode(anyOf(is(200), is(201)))
+            .log().all()
+            .when()
+            .get("v1.0/drives/{drive-id}/items/{item-id}/permissions", driveId, itemId)
+            .as(SharepointPermissionsResponse.class);
+    }
+
+    /**
+     * Delete a permission on a drive item by DELETEing a fully formed {@link SharepointSiteGroupPermissionRequest} body.
+     *
+     * @see <a href="DELETE /drives/{drive-id}/items/{item-id}/permissions/{perm-id}">Delete Permission permission</a>
+     */
+    @Nonnull
+    public String deletePermission(@NonNull final String driveId,
+                                   @NonNull final String itemId,
+                                   @NonNull final String permissionId) {
+
+        return authContext()
+            .authorizedRequest()
+            .baseUri(config.getGraphUri())
+            .port(config.getGraphPort())
+            .log().all()
+            .contentType(ContentType.JSON)
+            .expect().statusCode(anyOf(is(200), is(201), is(204)))
+            .log().all()
+            .when()
+            .delete("v1.0/drives/{driveId}/items/{itemId}/permissions/{permissionId}", driveId, itemId, permissionId)
+            .asString();
+    }
+
+    @Nonnull
+    public SharepointPermission invite(@NonNull final String driveId,
+                                       @NonNull final String itemId,
+                                       @NonNull final SharepointInviteRequest request) {
+
+        return authContext()
+            .authorizedRequest()
+            .baseUri(config.getGraphUri())
+            .port(config.getGraphPort())
+            .log().all()
+            // .accept(ContentType.JSON)
+            .contentType(ContentType.JSON)
+            .body(request)
+            .expect().statusCode(anyOf(is(200), is(201)))
+            .log().all()
+            .when()
+            .post("v1.0/drives/{drive-id}/items/{item-id}/invite", driveId, itemId)
+            .as(SharepointPermission.class);
+    }
+
+    /**
+     * Assigns a SharePoint (site) group - identified by its {@code principalId} and title - one or more roles on a
+     * drive item (folder or file).
+     *
+     * <p>Only valid for items inside a <b>SharePoint Embedded container</b>; on a regular SharePoint Online document
+     * library the underlying endpoint only accepts application permissions and this call will fail. The {@code itemId}
+     * must be a child folder or file, never the container root.
+     *
+     * @param driveId           the drive (container) id
+     * @param itemId            the child folder/file id
+     * @param sharePointGroupId the sharepoint group's id (unique within the site)
+     * @param roles             the roles to grant (e.g. {@link SharepointDriveItemRole#READ}, {@link SharepointDriveItemRole#WRITE})
+     */
+    @Nonnull
+    public SharepointPermission invite(@NonNull final String driveId,
+                                       @NonNull final String itemId,
+                                       @NonNull final String sharePointGroupId,
+                                       @NonNull final Iterable<SharepointDriveItemRole> roles) {
+        checkArgument(!isEmpty(roles), "at least one role must be provided");
+
+        final List<String> roleNames =
+            stream(roles)
+                .map(SharepointDriveItemRole::getValue)
+                .distinct()
+                .collect(Collectors.toList())
+            ;
+
+        final SharepointInviteRequest request = new SharepointInviteRequest();
+        request.setRequireSignIn(true);
+        request.setSendInvitation(false);
+        request.setMessage("Invitation to join SharePoint group");
+        final SharepointInviteRequest.Recipient recipientGroup = new SharepointInviteRequest.Recipient();
+        recipientGroup.setObjectId(sharePointGroupId);
+        request.setRecipients(
+            ImmutableList.of(
+                recipientGroup
+            )
+        );
+
+        request.setRoles(roleNames);
+
+        return invite(driveId, itemId, request);
     }
 }
 
