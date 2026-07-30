@@ -5,7 +5,6 @@ import de.leancoders.sharepoint.model.SharepointConfig;
 import de.leancoders.sharepoint.request.SharepointDriveItemRole;
 import de.leancoders.sharepoint.response.SharepointDriveItemsResponse;
 import de.leancoders.sharepoint.response.SharepointDrivesResponse;
-import de.leancoders.sharepoint.response.SharepointPermission;
 import de.leancoders.sharepoint.response.SharepointPermissionsResponse;
 import de.leancoders.sharepoint.response.SharepointSiteResponse;
 import de.leancoders.sharepoint.response.SharepointSitesResponse;
@@ -145,7 +144,7 @@ class SharepointDriveClientServiceTest {
                 );
         });
 
-        final SharepointPermission permission =
+        final SharepointPermissionsResponse permission =
             sharepointDriveClientService.invite(
                 driveId, itemId, groupId,
                 ImmutableSet.of(SharepointDriveItemRole.WRITE)

@@ -11,7 +11,6 @@ import de.leancoders.sharepoint.response.SharepointDriveItemsResponse;
 import de.leancoders.sharepoint.response.SharepointDrivesResponse;
 import de.leancoders.sharepoint.response.SharepointFields;
 import de.leancoders.sharepoint.response.SharepointLists;
-import de.leancoders.sharepoint.response.SharepointPermission;
 import de.leancoders.sharepoint.response.SharepointPermissionsResponse;
 import de.leancoders.sharepoint.response.SharepointSiteResponse;
 import de.leancoders.sharepoint.response.SharepointSitesResponse;
@@ -347,9 +346,9 @@ public class SharepointDriveClientService extends SharepointBaseClientService im
     }
 
     @Nonnull
-    public SharepointPermission invite(@NonNull final String driveId,
-                                       @NonNull final String itemId,
-                                       @NonNull final SharepointInviteRequest request) {
+    public SharepointPermissionsResponse invite(@NonNull final String driveId,
+                                                @NonNull final String itemId,
+                                                @NonNull final SharepointInviteRequest request) {
 
         return authContext()
             .authorizedRequest()
@@ -363,7 +362,7 @@ public class SharepointDriveClientService extends SharepointBaseClientService im
             .log().all()
             .when()
             .post("v1.0/drives/{drive-id}/items/{item-id}/invite", driveId, itemId)
-            .as(SharepointPermission.class);
+            .as(SharepointPermissionsResponse.class);
     }
 
     /**
@@ -380,10 +379,10 @@ public class SharepointDriveClientService extends SharepointBaseClientService im
      * @param roles             the roles to grant (e.g. {@link SharepointDriveItemRole#READ}, {@link SharepointDriveItemRole#WRITE})
      */
     @Nonnull
-    public SharepointPermission invite(@NonNull final String driveId,
-                                       @NonNull final String itemId,
-                                       @NonNull final String sharePointGroupId,
-                                       @NonNull final Iterable<SharepointDriveItemRole> roles) {
+    public SharepointPermissionsResponse invite(@NonNull final String driveId,
+                                                @NonNull final String itemId,
+                                                @NonNull final String sharePointGroupId,
+                                                @NonNull final Iterable<SharepointDriveItemRole> roles) {
         checkArgument(!isEmpty(roles), "at least one role must be provided");
 
         final List<String> roleNames =
