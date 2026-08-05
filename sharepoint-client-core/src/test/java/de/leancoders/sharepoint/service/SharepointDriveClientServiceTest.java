@@ -1,10 +1,15 @@
 package de.leancoders.sharepoint.service;
 
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+import de.leancoders.sharepoint.helper.SharepointCertificateCredential;
 import de.leancoders.sharepoint.model.SharepointConfig;
 import de.leancoders.sharepoint.request.SharepointDriveItemRole;
+import de.leancoders.sharepoint.response.SharepointDriveItemResponse;
 import de.leancoders.sharepoint.response.SharepointDriveItemsResponse;
 import de.leancoders.sharepoint.response.SharepointDrivesResponse;
+import de.leancoders.sharepoint.response.SharepointIds;
+import de.leancoders.sharepoint.response.SharepointPermission;
 import de.leancoders.sharepoint.response.SharepointPermissionResponse;
 import de.leancoders.sharepoint.response.SharepointPermissionsResponse;
 import de.leancoders.sharepoint.response.SharepointSiteResponse;
@@ -12,12 +17,14 @@ import de.leancoders.sharepoint.response.SharepointSitesResponse;
 import io.restassured.RestAssured;
 import io.restassured.http.ContentType;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.Strings;
 import org.assertj.core.util.Lists;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.Properties;
@@ -30,7 +37,7 @@ class SharepointDriveClientServiceTest {
     @BeforeEach
     void setUp() throws IOException {
         final Properties props = new Properties();
-        props.load(Files.newInputStream(Paths.get("../stage.env")));
+        props.load(Files.newInputStream(Paths.get("../prod.env")));
         config = SharepointConfig.of(
             props.getProperty("SHAREPOINT_AUTH_URI"),
             Integer.parseInt(props.getProperty("SHAREPOINT_AUTH_PORT")),
@@ -44,7 +51,13 @@ class SharepointDriveClientServiceTest {
 
     @Test
     void createRootFolder() {
-        final SharepointDriveClientService sharepointDriveClientService = new SharepointDriveClientService(config, new SharepointClientService(config));
+        final SharepointCertificateCredential assertion = SharepointCertificateCredential.fromPem(
+            // Path.of("C:\\Users\\Konrad\\.ssh\\lc-sharepoint-api-key.pem"),
+            // Path.of("C:\\Users\\Konrad\\.ssh\\lc-sharepoint-api-cert.pem"));
+            Path.of("C:\\Users\\Konrad\\.ssh\\qfm-psq-sharepoint-api-key.pem"),
+            Path.of("C:\\Users\\Konrad\\.ssh\\qfm-psq-sharepoint-api-cert.pem"));
+
+        final SharepointDriveClientService sharepointDriveClientService = new SharepointDriveClientService(config, new SharepointCertificateClientService(config, assertion));
 
         final SharepointSitesResponse sites = sharepointDriveClientService.sites(1000);
         System.out.println("sites = " + sites);
@@ -63,10 +76,14 @@ class SharepointDriveClientServiceTest {
         // System.out.println("lists = " + lists);
 
 
-        // QFM: id:
+        // LC
+        // final String siteId = "leancodersde.sharepoint.com,b2f4001d-7999-4427-b04b-ec632c7bcf50,996e2029-670c-458c-a9bc-a839a523e0a9";
+        // final String driveId = "b!HQD0spl5J0SwS-xjLHvPUCkgbpkMZ4xFqbyoOaUj4Kl3PR79YHGISqnmuVmScbeI";
 
-        final String siteId = "leancodersde.sharepoint.com,b2f4001d-7999-4427-b04b-ec632c7bcf50,996e2029-670c-458c-a9bc-a839a523e0a9";
-        final String driveId = "b!HQD0spl5J0SwS-xjLHvPUCkgbpkMZ4xFqbyoOaUj4Kl3PR79YHGISqnmuVmScbeI";
+        // QFM
+        final String siteId = "qfmeu.sharepoint.com,8e4c9bff-27d4-495d-93bf-1d46fef71e6d,b3eea8db-7789-452b-a251-b9e107109bf6";
+        final String driveId = "b!_5tMjtQnXUmTvx1G_vcebduo7rOJdytFolG54QcQm_YYgZ8ly82uS7Ekc1WWhhWA";
+
         final SharepointDrivesResponse drives = sharepointDriveClientService.drives(siteId);
         System.out.println("drives: " + drives);
 
@@ -84,6 +101,11 @@ class SharepointDriveClientServiceTest {
                 System.out.println("permissions = " + permissions);
             }
 
+            if (name.contains("Test-")) {
+                final SharepointPermissionsResponse permissions = sharepointDriveClientService.permissions(driveId, itemId);
+                System.out.println("permissions = " + permissions);
+            }
+
             final SharepointDriveItemsResponse children = sharepointDriveClientService.driveItemChildren(driveId, itemId);
             children.getValue().forEach(child -> {
                 final String childId = child.getId();
@@ -91,11 +113,26 @@ class SharepointDriveClientServiceTest {
                 final String childWebUrl = child.getWebUrl();
                 folderStructure.add(" Child Paths: %s / %s / %s".formatted(childId, childName, childWebUrl));
 
-                if (childWebUrl.contains("QA00001")) {
-                    final SharepointPermissionsResponse childPermissions = sharepointDriveClientService.permissions(driveId, childId);
-                    System.out.println("childPermissions = " + childPermissions);
-                }
+                if (Strings.CI.contains(childWebUrl, "Assistenten")) {
+                    final SharepointPermissionsResponse permissions = sharepointDriveClientService.permissions(driveId, childId);
+                    if (permissions.getValue().size() > 0) {
+                        permissions.getValue().forEach(permission -> {
+                            final String permissionId = permission.getId();
+                            final SharepointPermission.GrantedToV2 grantedToV2 = permission.getGrantedToV2();
+                            final SharepointPermission.SiteGroup siteGroup = grantedToV2.getSiteGroup();
+                            final String displayName = null != siteGroup ? siteGroup.getDisplayName() : "";
+                            final SharepointPermission.SharePointGroup sharePointGroup = grantedToV2.getSharePointGroup();
+                            final String title = null != sharePointGroup ? sharePointGroup.getTitle() : "";
 
+                            if (Strings.CI.contains(displayName, "Test-Assistenten-Teilzugriff") || Strings.CI.contains(title, "Test-Teamleiter-Teilzugriff")) {
+                                System.out.println("permission = " + permission);
+                                System.out.println("permissionId = " + permissionId);
+                                System.out.println("displayName = " + displayName);
+                                System.out.println("title = " + title);
+                            }
+                        });
+                    }
+                }
             });
         });
 
@@ -176,4 +213,47 @@ class SharepointDriveClientServiceTest {
         System.out.println("sites = " + sites);
     }
 
+    @Test
+    void name() {
+        // # connectivity
+        final SharepointClientService clientService = new SharepointClientService(config);
+        final SharepointDriveClientService driveService =
+            new SharepointDriveClientService(config, clientService);
+
+        // QFM
+        final String siteId = "qfmeu.sharepoint.com,8e4c9bff-27d4-495d-93bf-1d46fef71e6d,b3eea8db-7789-452b-a251-b9e107109bf6";
+        final String driveId = "b!_5tMjtQnXUmTvx1G_vcebduo7rOJdytFolG54QcQm_YYgZ8ly82uS7Ekc1WWhhWA";
+        final String itemId = "01BSXY5K6HUHP5QZ3FFRD33FJ4REXRK4DQ";
+        // LC
+        // final String siteId = "leancodersde.sharepoint.com,b2f4001d-7999-4427-b04b-ec632c7bcf50,996e2029-670c-458c-a9bc-a839a523e0a9";
+        // final String driveId = "b!HQD0spl5J0SwS-xjLHvPUCkgbpkMZ4xFqbyoOaUj4Kl3PR79YHGISqnmuVmScbeI";
+        // final String itemId = "01QL2MWJI3HE5R37DRTBB3J2WYMWKNHIY6";
+
+
+        final SharepointPermissionsResponse permissionsBefore = driveService.permissions(driveId, itemId);
+        System.out.println("permissionsBefore = " + permissionsBefore);
+
+        // TODO
+        final SharepointDriveItemResponse driveItemById = driveService.driveItemById(driveId, itemId);
+        final SharepointIds ids = driveItemById.getSharepointIds();
+
+        final SharepointCertificateCredential assertion = SharepointCertificateCredential.fromPem(
+            // Path.of("C:\\Users\\Konrad\\.ssh\\lc-sharepoint-api-key.pem"),
+            // Path.of("C:\\Users\\Konrad\\.ssh\\lc-sharepoint-api-cert.pem"));
+            Path.of("C:\\Users\\Konrad\\.ssh\\qfm-psq-sharepoint-api-key.pem"),
+            Path.of("C:\\Users\\Konrad\\.ssh\\qfm-psq-sharepoint-api-cert.pem"));
+
+        final SharepointRestClientService restService =
+            new SharepointRestClientService(new SharepointCertificateClientService(config, assertion));
+
+        restService.grantPermissions(ids, ImmutableMap.of(
+            "40", SharepointDriveItemRole.WRITE,
+            "42", SharepointDriveItemRole.OWNER
+        ), false);
+
+
+        final SharepointPermissionsResponse permissionsAfter = driveService.permissions(driveId, itemId);
+        System.out.println("permissionsAfter = " + permissionsAfter);
+
+    }
 }

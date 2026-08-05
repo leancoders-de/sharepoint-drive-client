@@ -9,7 +9,7 @@ import javax.annotation.Nonnull;
 public class SharepointGroupsClientService extends SharepointBaseClientService implements SharepointPaths {
 
     public SharepointGroupsClientService(final SharepointConfig sharepointConfig,
-                                         final SharepointClientService clientService) {
+                                         final SharepointAuthService clientService) {
         super(sharepointConfig, clientService);
     }
 

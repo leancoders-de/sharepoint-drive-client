@@ -1,6 +1,8 @@
 package de.leancoders.sharepoint.service;
 
+import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 import de.leancoders.sharepoint.model.SharepointConfig;
 import de.leancoders.sharepoint.request.SharepointDriveItemRole;
 import de.leancoders.sharepoint.request.SharepointFolderRequest;
@@ -30,8 +32,39 @@ import static org.hamcrest.Matchers.is;
 
 public class SharepointDriveClientService extends SharepointBaseClientService implements SharepointPaths {
 
+    private static final Joiner SELECT_JOINER = Joiner.on(",").skipNulls();
+
+    /**
+     * Graph omits {@code sharepointIds} from the default driveItem payload, so it has to be selected explicitly.
+     * Because {@code $select} is exclusive, every other property {@link de.leancoders.sharepoint.response.SharepointDriveItem}
+     * maps has to be listed alongside it.
+     *
+     * <p>An {@link ImmutableSet} rather than a plain set - it keeps insertion order, so the query string stays stable.
+     */
+    private static final Iterable<String> DRIVE_ITEM_SELECT =
+        ImmutableSet.of(
+            "id",
+            "name",
+            "createdDateTime",
+            "lastModifiedDateTime",
+            "parentReference",
+            "webUrl",
+            "fileSystemInfo",
+            "folder",
+            "root",
+            "size",
+            "createdBy",
+            "cTag",
+            "eTag",
+            "lastModifiedBy",
+            "file",
+            "shared",
+            "contentType",
+            "sharepointIds"
+        );
+
     public SharepointDriveClientService(final SharepointConfig sharepointConfig,
-                                        final SharepointClientService clientService) {
+                                        final SharepointAuthService clientService) {
         super(sharepointConfig, clientService);
     }
 
@@ -153,6 +186,11 @@ public class SharepointDriveClientService extends SharepointBaseClientService im
             .as(SharepointDriveItemResponse.class);
     }
 
+    /**
+     * Fetches a drive item including its {@code sharepointIds} facet, which carries the {@code listId},
+     * {@code listItemId} and {@code siteUrl} needed to address the item through the classic SharePoint REST API
+     * (e.g. for {@code breakroleinheritance} / {@code addroleassignment}).
+     */
     @Nonnull
     public SharepointDriveItemResponse driveItemById(@NonNull final String driveId,
                                                      @NonNull final String itemId) {
@@ -162,6 +200,7 @@ public class SharepointDriveClientService extends SharepointBaseClientService im
             .port(config.getGraphPort())
             .log().all()
             .accept(ContentType.JSON)
+            .queryParam("$select", SELECT_JOINER.join(DRIVE_ITEM_SELECT))
             .expect().statusCode(200)
             .log().all()
             .when()

@@ -32,6 +32,12 @@ public class SharepointDriveItem {
     @JsonProperty("webUrl")
     private String webUrl;
 
+    /**
+     * Only populated when the request asks for it via {@code $select=sharepointIds}.
+     */
+    @JsonProperty("sharepointIds")
+    private SharepointIds sharepointIds;
+
     @JsonProperty("fileSystemInfo")
     private FileSystemInfo fileSystemInfo;
 

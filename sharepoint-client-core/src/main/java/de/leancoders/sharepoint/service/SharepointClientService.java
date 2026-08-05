@@ -1,94 +1,53 @@
 package de.leancoders.sharepoint.service;
 
-import de.leancoders.sharepoint.helper.ObjectMapperFactory;
 import de.leancoders.sharepoint.model.SharepointConfig;
 import de.leancoders.sharepoint.model.SharepointTokenResponse;
 import io.restassured.RestAssured;
-import io.restassured.config.ObjectMapperConfig;
-import io.restassured.config.RestAssuredConfig;
 import io.restassured.http.ContentType;
 import io.restassured.specification.RequestSpecification;
 import lombok.NonNull;
 
 import javax.annotation.Nonnull;
 
-public class SharepointClientService {
-
-    @Nonnull
-    private static final RestAssuredConfig REST_ASSURED_CONFIG =
-        RestAssuredConfig.config()
-            .objectMapperConfig(
-                new ObjectMapperConfig().jackson2ObjectMapperFactory(
-                    (type, s) -> ObjectMapperFactory.createDefaultObjectMapper()
-                ));
-
-    @NonNull
-    private final SharepointConfig config;
-    @NonNull
-    private SharepointAuthContext authContext;
+/**
+ * Client secret based app-only authentication.
+ *
+ * <p>Fine for Microsoft Graph. <b>Not usable against the classic SharePoint REST API</b>, which inspects the
+ * {@code appidacr} claim and rejects anything obtained with a secret ({@code appidacr=1}) with <i>Unsupported app
+ * only token</i> - use {@link SharepointCertificateClientService} there.
+ */
+public class SharepointClientService extends SharepointAbstractAuthService {
 
     public SharepointClientService(@Nonnull final SharepointConfig config) {
-        this.config = config;
-        this.authContext = SharepointAuthContext.empty();
+        super(config);
     }
 
+    @Override
     @Nonnull
-    protected SharepointAuthContext obtainAccessToken() {
-        return obtainAccessToken(
-            config.getAppTenantId(),
-            config.getAppClientId(),
-            config.getAppClientSecret(),
-            SharepointPaths.OAUTH_AUTH__TOKEN
-        );
+    protected SharepointTokenResponse requestToken(@NonNull final String scope) {
+        return authGiven()
+            .contentType(ContentType.URLENC)
+            .formParam("client_id", config.getAppClientId())
+            .formParam("scope", scope)
+            .formParam("client_secret", config.getAppClientSecret())
+            .formParam("grant_type", "client_credentials")
+            .log().all()
+            .expect().statusCode(200)
+            .log().all()
+            .when()
+            .post(OAUTH_AUTH__TOKEN, config.getAppTenantId())
+            .as(SharepointTokenResponse.class);
     }
 
+    /**
+     * Pins the Graph host, so callers may issue relative paths.
+     */
+    @Override
     @Nonnull
-    protected SharepointAuthContext obtainAccessToken(@NonNull final String tenantId,
-                                                      @NonNull final String clientId,
-                                                      @NonNull final String clientSecret,
-                                                      @NonNull final String path) {
-
-        final SharepointTokenResponse token =
-            authGiven()
-                .contentType(ContentType.URLENC)
-                .formParam("client_id", clientId)
-                .formParam("scope", "https://graph.microsoft.com/.default")
-                .formParam("client_secret", clientSecret)
-                .formParam("grant_type", "client_credentials")
-                .log().all()
-                .expect().statusCode(200)
-                .log().all()
-                .when()
-                .post(path, tenantId)
-                .as(SharepointTokenResponse.class);
-
-        this.authContext = SharepointAuthContext.success(tenantId, clientId, clientSecret, token, this::graphGiven);
-
-        return this.authContext;
-    }
-
-    @Nonnull
-    private RequestSpecification authGiven() {
-        return RestAssured.given()
-            .port(config.getAuthPort())
-            .baseUri(config.getAuthUri())
-            .config(REST_ASSURED_CONFIG);
-    }
-
-    @Nonnull
-    private RequestSpecification graphGiven() {
+    protected RequestSpecification given() {
         return RestAssured.given()
             .port(config.getGraphPort())
             .baseUri(config.getGraphUri())
             .config(REST_ASSURED_CONFIG);
-    }
-
-    @Nonnull
-    public SharepointAuthContext validateAndGet() {
-        if (!authContext.isAuthenticated()) {
-            obtainAccessToken();
-        }
-
-        return authContext;
     }
 }
