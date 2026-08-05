@@ -33,7 +33,9 @@ public class SharepointCertificateClientService extends SharepointAbstractAuthSe
      */
     public SharepointCertificateClientService(@NonNull final SharepointConfig config,
                                               @NonNull final SharepointCertificateConfig certificateConfig) {
-        this(config, SharepointCertificateCredential.fromKeyStore(certificateConfig));
+        super(config);
+
+        this.credential = SharepointCertificateCredential.fromKeyStore(certificateConfig);
     }
 
     /**
@@ -43,24 +45,27 @@ public class SharepointCertificateClientService extends SharepointAbstractAuthSe
      * @see SharepointCertificateCredential#fromPem(String, String)
      * @see SharepointCertificateCredential#of(java.security.PrivateKey, String)
      */
-    public SharepointCertificateClientService(@NonNull final SharepointConfig config,
-                                              @NonNull final SharepointCertificateCredential credential) {
+    public SharepointCertificateClientService(@NonNull final SharepointConfig config) {
         super(config);
-        this.credential = credential;
+
+        this.credential = SharepointCertificateCredential.fromPem(
+            config.getKeyFilePath(),
+            config.getCertFilePath()
+        );
     }
 
     @Override
     @Nonnull
     protected SharepointTokenResponse requestToken(@NonNull final String scope) {
 
-        final String clientAssertion = credential.create(config.getAppClientId(), tokenEndpointUrl());
+        final String assertion = credential.create(config.getAppClientId(), tokenEndpointUrl());
 
         return authGiven()
             .contentType(ContentType.URLENC)
             .formParam("client_id", config.getAppClientId())
             .formParam("scope", scope)
             .formParam("client_assertion_type", SharepointCertificateCredential.CLIENT_ASSERTION_TYPE)
-            .formParam("client_assertion", clientAssertion)
+            .formParam("client_assertion", assertion)
             .formParam("grant_type", "client_credentials")
             // deliberately not logged - the assertion is a signing credential
             .expect().statusCode(200)

@@ -2,7 +2,6 @@ package de.leancoders.sharepoint.service;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-import de.leancoders.sharepoint.helper.SharepointCertificateCredential;
 import de.leancoders.sharepoint.model.SharepointConfig;
 import de.leancoders.sharepoint.request.SharepointDriveItemRole;
 import de.leancoders.sharepoint.response.SharepointDriveItemResponse;
@@ -45,19 +44,15 @@ class SharepointDriveClientServiceTest {
             Integer.parseInt(props.getProperty("SHAREPOINT_GRAPH_PORT")),
             props.getProperty("SHAREPOINT_APP_CLIENT_ID"),
             props.getProperty("SHAREPOINT_APP_CLIENT_SECRET"),
-            props.getProperty("SHAREPOINT_APP_TENANT_ID")
+            props.getProperty("SHAREPOINT_APP_TENANT_ID"),
+            Path.of(props.getProperty("SHAREPOINT_CERTIFICATE_KEY_PATH")),
+            Path.of(props.getProperty("SHAREPOINT_CERTIFICATE_CERT_PATH"))
         );
     }
 
     @Test
     void createRootFolder() {
-        final SharepointCertificateCredential assertion = SharepointCertificateCredential.fromPem(
-            // Path.of("C:\\Users\\Konrad\\.ssh\\lc-sharepoint-api-key.pem"),
-            // Path.of("C:\\Users\\Konrad\\.ssh\\lc-sharepoint-api-cert.pem"));
-            Path.of("C:\\Users\\Konrad\\.ssh\\qfm-psq-sharepoint-api-key.pem"),
-            Path.of("C:\\Users\\Konrad\\.ssh\\qfm-psq-sharepoint-api-cert.pem"));
-
-        final SharepointDriveClientService sharepointDriveClientService = new SharepointDriveClientService(config, new SharepointCertificateClientService(config, assertion));
+        final SharepointDriveClientService sharepointDriveClientService = new SharepointDriveClientService(config, new SharepointCertificateClientService(config));
 
         final SharepointSitesResponse sites = sharepointDriveClientService.sites(1000);
         System.out.println("sites = " + sites);
@@ -237,14 +232,8 @@ class SharepointDriveClientServiceTest {
         final SharepointDriveItemResponse driveItemById = driveService.driveItemById(driveId, itemId);
         final SharepointIds ids = driveItemById.getSharepointIds();
 
-        final SharepointCertificateCredential assertion = SharepointCertificateCredential.fromPem(
-            // Path.of("C:\\Users\\Konrad\\.ssh\\lc-sharepoint-api-key.pem"),
-            // Path.of("C:\\Users\\Konrad\\.ssh\\lc-sharepoint-api-cert.pem"));
-            Path.of("C:\\Users\\Konrad\\.ssh\\qfm-psq-sharepoint-api-key.pem"),
-            Path.of("C:\\Users\\Konrad\\.ssh\\qfm-psq-sharepoint-api-cert.pem"));
-
         final SharepointRestClientService restService =
-            new SharepointRestClientService(new SharepointCertificateClientService(config, assertion));
+            new SharepointRestClientService(new SharepointCertificateClientService(config));
 
         restService.grantPermissions(ids, ImmutableMap.of(
             "40", SharepointDriveItemRole.WRITE,

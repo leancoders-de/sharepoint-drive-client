@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Properties;
 
@@ -25,7 +26,9 @@ class SharepointGroupClientServiceTest {
             Integer.parseInt(props.getProperty("SHAREPOINT_GRAPH_PORT")),
             props.getProperty("SHAREPOINT_APP_CLIENT_ID"),
             props.getProperty("SHAREPOINT_APP_CLIENT_SECRET"),
-            props.getProperty("SHAREPOINT_APP_TENANT_ID")
+            props.getProperty("SHAREPOINT_APP_TENANT_ID"),
+            Path.of(props.getProperty("SHAREPOINT_CERTIFICATE_KEY_PATH")),
+            Path.of(props.getProperty("SHAREPOINT_CERTIFICATE_CERT_PATH"))
         );
     }
 
