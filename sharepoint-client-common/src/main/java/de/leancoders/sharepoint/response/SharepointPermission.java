@@ -27,8 +27,14 @@ public class SharepointPermission {
 
     @Data
     public static class GrantedToV2 {
+        @JsonProperty("user")
+        private User user;
+
         @JsonProperty("siteGroup")
         private SiteGroup siteGroup;
+
+        @JsonProperty("siteUser")
+        private SiteUser siteUser;
 
         @JsonProperty("sharePointGroup")
         private SharePointGroup sharePointGroup;
@@ -41,6 +47,34 @@ public class SharepointPermission {
 
         @JsonProperty("displayName")
         private String displayName;
+    }
+
+    @Data
+    public static class User {
+        @JsonProperty("@odata.type")
+        private String type;
+
+        @JsonProperty("displayName")
+        private String displayName;
+        @JsonProperty("email")
+        private String email;
+        @JsonProperty("id")
+        private String id;
+
+    }
+
+    @Data
+    public static class SiteUser {
+        @JsonProperty("loginName")
+        private String loginName;
+
+        @JsonProperty("displayName")
+        private String displayName;
+        @JsonProperty("email")
+        private String email;
+        @JsonProperty("id")
+        private String id;
+
     }
 
     @Data

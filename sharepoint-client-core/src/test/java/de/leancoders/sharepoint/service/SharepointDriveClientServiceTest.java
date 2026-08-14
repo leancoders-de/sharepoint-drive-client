@@ -108,7 +108,7 @@ class SharepointDriveClientServiceTest {
                 final String childWebUrl = child.getWebUrl();
                 folderStructure.add(" Child Paths: %s / %s / %s".formatted(childId, childName, childWebUrl));
 
-                if (Strings.CI.contains(childWebUrl, "Assistenten")) {
+                if (Strings.CI.contains(childWebUrl, "Monteur")) {
                     final SharepointPermissionsResponse permissions = sharepointDriveClientService.permissions(driveId, childId);
                     if (permissions.getValue().size() > 0) {
                         permissions.getValue().forEach(permission -> {
