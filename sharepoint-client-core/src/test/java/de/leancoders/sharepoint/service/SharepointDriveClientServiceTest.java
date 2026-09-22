@@ -36,7 +36,7 @@ class SharepointDriveClientServiceTest {
     @BeforeEach
     void setUp() throws IOException {
         final Properties props = new Properties();
-        props.load(Files.newInputStream(Paths.get("../prod.env")));
+        props.load(Files.newInputStream(Paths.get("../stage.env")));
         config = SharepointConfig.of(
             props.getProperty("SHAREPOINT_AUTH_URI"),
             Integer.parseInt(props.getProperty("SHAREPOINT_AUTH_PORT")),
@@ -245,4 +245,27 @@ class SharepointDriveClientServiceTest {
         System.out.println("permissionsAfter = " + permissionsAfter);
 
     }
+
+    @Test
+    void testDownload() {
+        // # connectivity
+        final SharepointClientService clientService = new SharepointClientService(config);
+        final SharepointDriveClientService driveService =
+            new SharepointDriveClientService(config, clientService);
+
+        // QFM
+        final String siteId = "leancodersde.sharepoint.com,b2f4001d-7999-4427-b04b-ec632c7bcf50,996e2029-670c-458c-a9bc-a839a523e0a9";
+        final String driveId = "b!HQD0spl5J0SwS-xjLHvPUCkgbpkMZ4xFqbyoOaUj4Kl3PR79YHGISqnmuVmScbeI";
+        final String itemId = "01QL2MWJOQ5SNLN5IJW5A34VUOE5TW7KFQ";
+
+        final SharepointDriveItemResponse sharepointDriveItemResponse = driveService.driveItemListItems(driveId, itemId);
+
+        final byte[] bytes = driveService.downloadFile(driveId, itemId);
+
+        System.out.println("bytes = " + bytes);
+
+
+    }
+
+
 }
