@@ -18,7 +18,7 @@ class SharepointGroupClientServiceTest {
     @BeforeEach
     void setUp() throws IOException {
         final Properties props = new Properties();
-        props.load(Files.newInputStream(Paths.get("../stage.env")));
+        props.load(Files.newInputStream(Paths.get("../prod.env")));
         config = SharepointConfig.of(
             props.getProperty("SHAREPOINT_AUTH_URI"),
             Integer.parseInt(props.getProperty("SHAREPOINT_AUTH_PORT")),

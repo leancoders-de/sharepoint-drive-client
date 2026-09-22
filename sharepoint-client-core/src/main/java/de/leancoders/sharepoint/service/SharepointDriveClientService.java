@@ -3,6 +3,7 @@ package de.leancoders.sharepoint.service;
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.net.HttpHeaders;
 import de.leancoders.sharepoint.model.SharepointConfig;
 import de.leancoders.sharepoint.request.SharepointDriveItemRole;
 import de.leancoders.sharepoint.request.SharepointFolderRequest;
@@ -25,6 +26,8 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkState;
+import static com.google.common.base.Strings.isNullOrEmpty;
 import static com.google.common.collect.Iterables.isEmpty;
 import static com.google.common.collect.Streams.stream;
 import static org.hamcrest.Matchers.anyOf;
@@ -342,6 +345,55 @@ public class SharepointDriveClientService extends SharepointBaseClientService im
             .when()
             .put("v1.0/drives/{driveId}/root:/{path}:/content/", driveId, fullPathString)
             .as(SharepointDriveItemResponse.class);
+    }
+
+    /**
+     * Downloads the content of a file.
+     *
+     * <p>The whole file is held in memory, so this is meant for documents rather than arbitrarily large files.
+     */
+    @Nonnull
+    public byte[] downloadFile(@NonNull final String driveId,
+                               @NonNull final String itemId) {
+
+        final String downloadUrl =
+            authContext()
+                .authorizedRequest()
+                .baseUri(config.getGraphUri())
+                .port(config.getGraphPort())
+                .redirects().follow(false)
+                .log().all()
+                .expect().statusCode(302)
+                .log().all()
+                .when()
+                .get("v1.0/drives/{driveId}/items/{itemId}/content", driveId, itemId)
+                .header(HttpHeaders.LOCATION)
+            ;
+
+        return download(downloadUrl);
+    }
+
+    /**
+     * Graph answers {@code /content} with a {@code 302} to a short-lived, pre-authenticated url on the SharePoint
+     * host. The redirect is followed by hand: RestAssured would replay every header - the Graph bearer token
+     * included - against that host.
+     *
+     * <p>The response is only logged on error, so binary content does not end up in the log.
+     */
+    @Nonnull
+    private byte[] download(final String downloadUrl) {
+        checkState(!isNullOrEmpty(downloadUrl), "graph answered without a download location");
+
+        return authContext()
+            .getRequestSpecification()
+            .get()
+            .urlEncodingEnabled(false)
+            .log().all()
+            .expect().statusCode(200)
+            .log().ifError()
+            .when()
+            .get(downloadUrl)
+            .asByteArray();
     }
 
     @Nonnull
