@@ -5,10 +5,13 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.net.HttpHeaders;
 import de.leancoders.sharepoint.model.SharepointConfig;
+import de.leancoders.sharepoint.request.SharepointConflictBehavior;
+import de.leancoders.sharepoint.request.SharepointCopyRequest;
 import de.leancoders.sharepoint.request.SharepointDriveItemRole;
 import de.leancoders.sharepoint.request.SharepointFolderRequest;
 import de.leancoders.sharepoint.request.SharepointInviteRequest;
 import de.leancoders.sharepoint.request.SharepointSiteGroupPermissionRequest;
+import de.leancoders.sharepoint.response.SharepointAsyncJobStatus;
 import de.leancoders.sharepoint.response.SharepointDriveItemResponse;
 import de.leancoders.sharepoint.response.SharepointDriveItemsResponse;
 import de.leancoders.sharepoint.response.SharepointDrivesResponse;
@@ -22,6 +25,8 @@ import io.restassured.http.ContentType;
 import lombok.NonNull;
 
 import javax.annotation.Nonnull;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -30,12 +35,24 @@ import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.base.Strings.isNullOrEmpty;
 import static com.google.common.collect.Iterables.isEmpty;
 import static com.google.common.collect.Streams.stream;
+import static org.apache.commons.lang3.StringUtils.trimToNull;
 import static org.hamcrest.Matchers.anyOf;
 import static org.hamcrest.Matchers.is;
 
 public class SharepointDriveClientService extends SharepointBaseClientService implements SharepointPaths {
 
     private static final Joiner SELECT_JOINER = Joiner.on(",").skipNulls();
+
+    /**
+     * Unlike the item creation calls, which take it as a body property, {@code /copy} expects the conflict
+     * behavior as a query parameter.
+     */
+    private static final String GRAPH_CONFLICT_BEHAVIOR = "@microsoft.graph.conflictBehavior";
+
+    /**
+     * How long {@link #awaitCopy(String, Duration)} waits between two reads of a monitor url.
+     */
+    private static final Duration COPY_POLL_INTERVAL = Duration.ofSeconds(2);
 
     /**
      * Graph omits {@code sharepointIds} from the default driveItem payload, so it has to be selected explicitly.
@@ -345,6 +362,189 @@ public class SharepointDriveClientService extends SharepointBaseClientService im
             .when()
             .put("v1.0/drives/{driveId}/root:/{path}:/content/", driveId, fullPathString)
             .as(SharepointDriveItemResponse.class);
+    }
+
+    /**
+     * Copies a file or folder into a folder of a - possibly different - drive, keeping the source name.
+     *
+     * @see #copy(String, String, SharepointCopyRequest, SharepointConflictBehavior)
+     */
+    @Nonnull
+    public String copy(@NonNull final String fromDriveId,
+                       @NonNull final String fromItemId,
+                       @NonNull final String toDriveId,
+                       @NonNull final String toFolderItemId,
+                       @NonNull final SharepointConflictBehavior conflictBehavior) {
+
+        return copy(fromDriveId, fromItemId, copyRequest(toDriveId, toFolderItemId, ""), conflictBehavior);
+    }
+
+    /**
+     * Copies a file or folder into a folder of a - possibly different - drive under a new name.
+     *
+     * @see #copy(String, String, SharepointCopyRequest, SharepointConflictBehavior)
+     */
+    @Nonnull
+    public String copy(@NonNull final String fromDriveId,
+                       @NonNull final String fromItemId,
+                       @NonNull final String toDriveId,
+                       @NonNull final String toFolderItemId,
+                       @NonNull final String newName,
+                       @NonNull final SharepointConflictBehavior conflictBehavior) {
+
+        return copy(fromDriveId, fromItemId, copyRequest(toDriveId, toFolderItemId, newName), conflictBehavior);
+    }
+
+    /**
+     * Queues a copy of a drive item.
+     *
+     * <p>Copying is asynchronous: Graph only accepts the job and answers {@code 202 Accepted} with a monitor url in
+     * its {@code Location} header. A successful return therefore says nothing about the copy itself - a name clash
+     * in the target folder surfaces as a {@code nameAlreadyExists} on the monitor url, never here. Hand the url to
+     * {@link #copyStatus(String)} or {@link #awaitCopy(String, Duration)}, or use
+     * {@link #copyAndAwait(String, String, String, String, String, SharepointConflictBehavior, Duration)} to get the
+     * new item in one call.
+     *
+     * <p>Neither metadata nor permissions are carried over - the copy inherits the target folder's permissions - and
+     * only the latest major version is copied unless
+     * {@link SharepointCopyRequest#setIncludeAllVersionHistory(Boolean)} says otherwise. A single job copies at most
+     * 30.000 items.
+     *
+     * @param driveId          the drive the source item lives in
+     * @param itemId           the file or folder to copy; a drive root only works together with
+     *                         {@link SharepointCopyRequest#setChildrenOnly(Boolean)}
+     * @param request          the target folder plus the optional name and copy flags
+     * @param conflictBehavior how a name clash in the target folder is resolved
+     * @return the monitor url the copy reports its progress on
+     * @see <a href="https://learn.microsoft.com/en-us/graph/api/driveitem-copy?view=graph-rest-1.0">driveItem: copy</a>
+     */
+    @Nonnull
+    public String copy(@NonNull final String driveId,
+                       @NonNull final String itemId,
+                       @NonNull final SharepointCopyRequest request,
+                       @NonNull final SharepointConflictBehavior conflictBehavior) {
+
+        final String monitorUrl =
+            authContext()
+                .authorizedRequest()
+                // the query parameter name carries an '@' and dots that are meant to reach Graph unencoded
+                .urlEncodingEnabled(false)
+                .baseUri(config.getGraphUri())
+                .port(config.getGraphPort())
+                .log().all()
+                .accept(ContentType.JSON)
+                .contentType(ContentType.JSON)
+                .queryParam(GRAPH_CONFLICT_BEHAVIOR, conflictBehavior.getValue())
+                .body(request)
+                .expect().statusCode(202)
+                .log().all()
+                .when()
+                .post("v1.0/drives/{driveId}/items/{itemId}/copy/", driveId, itemId)
+                .header(HttpHeaders.LOCATION)
+            ;
+
+        checkState(!isNullOrEmpty(monitorUrl), "graph accepted the copy without a monitor location");
+
+        return monitorUrl;
+    }
+
+    /**
+     * Reads the current progress of a queued copy from its monitor url.
+     *
+     * <p>The url is short-lived, unique to the original caller and - like the download url - served by SharePoint
+     * rather than by Graph, so it is requested without the Graph bearer token.
+     *
+     * @param monitorUrl the url {@link #copy(String, String, SharepointCopyRequest, SharepointConflictBehavior)} returned
+     * @see <a href="https://learn.microsoft.com/en-us/graph/long-running-actions-overview">Long running actions</a>
+     */
+    @Nonnull
+    public SharepointAsyncJobStatus copyStatus(@NonNull final String monitorUrl) {
+        checkArgument(!isNullOrEmpty(monitorUrl), "monitorUrl must not be empty");
+
+        return authContext()
+            .getRequestSpecification()
+            .get()
+            .urlEncodingEnabled(false)
+            .accept(ContentType.JSON)
+            .log().all()
+            // a job still running answers 202, a finished one 200 - both carry an asyncJobStatus body
+            .expect().statusCode(anyOf(is(200), is(202)))
+            .log().all()
+            .when()
+            .get(monitorUrl)
+            .as(SharepointAsyncJobStatus.class);
+    }
+
+    /**
+     * Polls a monitor url until the copy has either completed or failed.
+     *
+     * @param monitorUrl the url {@link #copy(String, String, SharepointCopyRequest, SharepointConflictBehavior)} returned
+     * @param timeout    how long to keep polling before giving up
+     * @return the terminal status - check {@link SharepointAsyncJobStatus#isCompleted()}; a failed job carries its
+     * reason in {@link SharepointAsyncJobStatus#getError()}
+     * @throws IllegalStateException if the copy has not reached a terminal state within {@code timeout}
+     */
+    @Nonnull
+    public SharepointAsyncJobStatus awaitCopy(@NonNull final String monitorUrl,
+                                              @NonNull final Duration timeout) {
+        checkArgument(timeout.compareTo(Duration.ZERO) > 0, "timeout must be positive");
+
+        final Instant deadline = Instant.now().plus(timeout);
+
+        SharepointAsyncJobStatus status = copyStatus(monitorUrl);
+        while (!status.isDone()) {
+            checkState(
+                Instant.now().isBefore(deadline),
+                "copy did not finish within %s, last reported status was %s", timeout, status.getStatus()
+            );
+            sleep(COPY_POLL_INTERVAL);
+            status = copyStatus(monitorUrl);
+        }
+
+        return status;
+    }
+
+    /**
+     * Copies a drive item, waits for the job to finish and fetches the new item.
+     *
+     * <p>The copy is created in {@code toDriveId}, so that is the drive the returned item is read from.
+     *
+     * @param newName the name of the copy, or {@code null} to keep the source name
+     * @throws IllegalStateException if the copy failed or did not finish within {@code timeout}
+     */
+    @Nonnull
+    public SharepointDriveItemResponse copyAndAwait(@NonNull final String fromDriveId,
+                                                    @NonNull final String fromItemId,
+                                                    @NonNull final String toDriveId,
+                                                    @NonNull final String toFolderItemId,
+                                                    @NonNull final String newName,
+                                                    @NonNull final SharepointConflictBehavior conflictBehavior,
+                                                    @NonNull final Duration timeout) {
+
+        final SharepointCopyRequest sharepointCopyRequest = copyRequest(toDriveId, toFolderItemId, newName);
+        final String monitorUrl = copy(fromDriveId, fromItemId, sharepointCopyRequest, conflictBehavior);
+
+        final SharepointAsyncJobStatus status = awaitCopy(monitorUrl, timeout);
+        checkState(status.isCompleted(), "copy failed: %s", status.getError());
+        checkState(!isNullOrEmpty(status.getResourceId()), "copy completed without a resource id");
+
+        return driveItemById(toDriveId, status.getResourceId());
+    }
+
+    @Nonnull
+    private static SharepointCopyRequest copyRequest(@NonNull final String toDriveId,
+                                                     @NonNull final String toFolderItemId,
+                                                     @NonNull final String newName) {
+
+        final SharepointCopyRequest.SharepointItemReference parentReference = new SharepointCopyRequest.SharepointItemReference();
+        parentReference.setDriveId(toDriveId);
+        parentReference.setId(toFolderItemId);
+
+        final SharepointCopyRequest request = new SharepointCopyRequest();
+        request.setParentReference(parentReference);
+        request.setName(trimToNull(newName));
+
+        return request;
     }
 
     /**

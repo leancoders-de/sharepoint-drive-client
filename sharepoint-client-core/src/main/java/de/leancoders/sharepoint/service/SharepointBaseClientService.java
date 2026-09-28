@@ -7,6 +7,7 @@ import lombok.Getter;
 import lombok.NonNull;
 
 import javax.annotation.Nonnull;
+import java.time.Duration;
 
 @AllArgsConstructor(access = AccessLevel.PROTECTED)
 @Getter
@@ -23,6 +24,16 @@ public abstract class SharepointBaseClientService {
     @Nonnull
     protected SharepointAuthContext authContext() {
         return clientService.validateAndGet(config.getGraphUri());
+    }
+
+    protected static void sleep(@NonNull final Duration duration) {
+        try {
+            Thread.sleep(duration.toMillis());
+        }
+        catch (final InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("interrupted while waiting for the copy to finish", e);
+        }
     }
 
 
